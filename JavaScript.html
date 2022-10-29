@@ -1,0 +1,91 @@
+<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.14.7/dist/umd/popper.min.js" integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.3.1/dist/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+
+<script>
+  $(function() {
+    showDateTime();
+    setInterval(showDateTime, 1000);
+    
+    google.script.run
+       .withSuccessHandler(onGetMostRecentClockInOutSuccess)
+       .getMostRecentClockInOut();
+  });
+
+  function showDateTime() {
+    let date = new Date();
+    let dateStr = date.toLocaleDateString();
+    let dayName = new Date(dateStr).toLocaleString('en-us', {weekday:'long'});
+
+    $("#day").html(dayName);
+    $("#date").html(dateStr);
+    $("#time").html(date.toLocaleTimeString());
+  }
+
+  function onGetMostRecentClockInOutSuccess({mostRecentClockInOut}) {
+    let [day, dateStr, timeIn, timeOut, weekTotal] = mostRecentClockInOut;
+
+    let haveUsedBefore = day ? true : false;
+    let isClockedIn = haveUsedBefore && !timeOut;
+ 
+    let statusStr = haveUsedBefore 
+      ? `Clocked ${isClockedIn ? 'in' : 'out'} at ${isClockedIn ? timeIn : timeOut} on ${dateStr}`
+      : 'Welcome new user!';
+    
+    $('#clockInOutBtn').data('isClockedIn', isClockedIn);
+    $('#clockInOutBtn').html(isClockedIn ? 'Clock out' : 'Clock in');
+    $('#clockInOutBtn').removeAttr('hidden');
+    
+    $('#status').html(statusStr);
+    if (weekTotal) {
+      showWeekTotal(weekTotal, dateStr);
+    }
+  }
+
+  function showWeekTotal(hours, dateStr) {
+   let weekTotalStr =`${hours} Hours for week ending ${getWeekEnding(dateStr)}`
+    $('#weekTotal').html(weekTotalStr);
+  }
+
+  function getWeekEnding(dateStr) {
+    let date = new Date(Date.parse(dateStr));
+    date.setDate(date.getDate() - date.getDay() + 6);
+
+    return date.toLocaleDateString();
+  }
+
+  function onClickClockInOutBtn() {
+    $('#clockInOutBtn').attr('disabled', true);
+    $('#clockInOutBtn').html('working...');
+
+    let date = new Date();
+    let dateStr = date.toLocaleDateString();
+    let timeStr = date.toLocaleTimeString(navigator.language, {hour: '2-digit', minute:'2-digit'});
+
+    if ($('#clockInOutBtn').data('isClockedIn')) {
+      google.script.run
+        .withSuccessHandler(onClockSuccess)
+        .clockOut({dateStr: dateStr, time: timeStr});
+    } 
+    else {
+      google.script.run
+        .withSuccessHandler(onClockSuccess)
+        .clockIn({dateStr: dateStr, time: timeStr});
+    }
+  }
+
+  function onClockSuccess({dateStr, time, weekTotal}) {
+    let [status, btnText] = $('#clockInOutBtn').data('isClockedIn') 
+      ? ['out', 'in']
+      : ['in', 'out'];
+
+    $('#status').html(`Clocked ${status} at ${time}`);
+    $('#clockInOutBtn').html(`Clock ${btnText}`);
+    $('#clockInOutBtn').data('isClockedIn', !$('#clockInOutBtn').data('isClockedIn'));
+    $('#clockInOutBtn').removeAttr('disabled');
+
+    if (status === 'out') {
+      showWeekTotal(weekTotal, dateStr);
+    }
+  }
+</script>
